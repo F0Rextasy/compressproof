@@ -16,7 +16,7 @@ survives: `verify` restores the original and compares SHA-256, and the
 `proof` harness answers the same needle questions on the original and
 the compressed form.
 
-![compressproof terminal demo](assets/demo.svg)
+![compressproof terminal demo](assets/demo.png)
 
 ## The problem is real
 
