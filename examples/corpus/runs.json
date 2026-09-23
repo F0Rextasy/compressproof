@@ -1,0 +1,37 @@
+{
+  "name": "test",
+  "total_count": 3,
+  "workflow_runs": [
+    {
+      "conclusion": "failure",
+      "created_at": "2026-09-20T10:00:00Z",
+      "head_branch": "feature/compress",
+      "head_sha": "b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
+      "id": 1548723001,
+      "name": "test",
+      "run_started_at": "2026-09-20T10:00:00Z",
+      "updated_at": "2026-09-20T10:20:00Z"
+    },
+    {
+      "conclusion": "success",
+      "created_at": "2026-09-21T09:00:00Z",
+      "head_branch": "master",
+      "head_sha": "11d5960a326750d5838078e36cf38b85af677262",
+      "id": 1548723002,
+      "name": "test",
+      "run_started_at": "2026-09-21T09:00:00Z",
+      "updated_at": "2026-09-21T09:05:00Z"
+    },
+    {
+      "conclusion": "success",
+      "created_at": "2026-09-22T08:00:00Z",
+      "head_branch": "master",
+      "head_sha": "a26af69be951a213d495a4c3e4e4022e16d87065",
+      "id": 1548723003,
+      "name": "test",
+      "run_number": 42,
+      "run_started_at": "2026-09-22T08:00:00Z",
+      "updated_at": "2026-09-22T08:03:00Z"
+    }
+  ]
+}

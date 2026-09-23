@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>compressproof demo page</title>
+  <meta name="description" content="A small deterministic HTML fixture for the compressproof corpus">
+</head>
+<body>
+  <header>
+    <h1>compressproof demo page</h1>
+    <nav><a href="#proof">Proof</a> <a href="#modes">Modes</a></nav>
+  </header>
+  <main id="proof">
+    <section id="modes">
+      <h2>Three lossless modes</h2>
+      <ul>
+        <li>dedupe: repeated blocks stored once, repeats become index refs</li>
+        <li>strip: trailing whitespace collapsed, every byte recorded</li>
+        <li>extract: keep matching lines, dropped bytes kept in a sidecar</li>
+      </ul>
+    </section>
+    <section id="guarantee">
+      <h2>Guarantee</h2>
+      <p>verify restores the original bytes and compares SHA-256: any mismatch exits 1 as silent-loss.</p>
+      <p>The workflow name that has no concurrency group in the demo payload is called nightly-audit.</p>
+    </section>
+  </main>
+  <footer>compressproof fixture v1</footer>
+</body>
+</html>

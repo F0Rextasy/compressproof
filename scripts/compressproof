@@ -1,0 +1,665 @@
+#!/usr/bin/env python3
+"""compressproof -- verified context compressor: shrink context with proof.
+
+Three lossless modes over UTF-8 text files:
+
+  dedupe   record/block dedupe: lines are hashed (SHA-256), the first
+           occurrence is kept inline, repeats become index references.
+  strip    reversible whitespace strip: trailing spaces/tabs/CR removed
+           and blank-line runs collapsed, every removed byte recorded so
+           restore is byte-exact (transform id strip-v1:trail+blank).
+  extract  query filter: only lines matching --query (substring, or regex
+           with --regex) stay in the main artifact; dropped lines go to a
+           sidecar file, so restore is byte-exact.
+
+Every compressed artifact is a deterministic JSON bundle (sorted keys,
+compact separators), so the same input always yields the same bytes.
+
+Subcommands:
+
+  compress --mode MODE --in FILE --out FILE [--sidecar FILE]
+           [--query Q [--regex]] [--format text|json]
+  verify   --orig FILE --bundle FILE [--sidecar FILE] [--format text|json]
+  proof    --corpus DIR [--needles FILE] [--results FILE] [--format text|json]
+
+Exit 0 = pass/clean, 1 = findings/gate failed, 2 = usage error.
+No network calls, ever. Python 3.8+ stdlib only.
+"""
+
+import argparse
+import gzip
+import hashlib
+import json
+import os
+import re
+import sys
+
+FORMAT = "compressproof/v1"
+SIDECAR_FORMAT = "compressproof-sidecar/v1"
+MODES = ("dedupe", "strip", "extract")
+TRANSFORM_IDS = {
+    "dedupe": "dedupe-v1:line-sha256-index",
+    "strip": "strip-v1:trail+blank",
+    "extract": "extract-v1:line-filter+sidecar",
+}
+
+FINDINGS = {
+    "silent-loss": (
+        "fail",
+        "restored bytes differ from the original -- the transform "
+        "is not reversible for this input"),
+    "sidecar-mismatch": (
+        "fail",
+        "sidecar file does not match the hash recorded in the bundle"),
+    "answer-divergence": (
+        "fail",
+        "a needle question answered differently on the compressed "
+        "representation than on the original"),
+    "roundtrip-failure": (
+        "fail",
+        "a corpus file did not restore byte-exact in some mode"),
+}
+
+BOLD = "\033[1m"
+RED = "\033[31m"
+GREEN = "\033[32m"
+DIM = "\033[2m"
+RESET = "\033[0m"
+
+
+def paint(text, *codes, color=True):
+    if not color:
+        return text
+    return "".join(codes) + text + RESET
+
+
+class UsageError(Exception):
+    pass
+
+
+def sha256_hex(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def read_text_file(path):
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read()
+    except OSError as exc:
+        raise UsageError("cannot read %s: %s" % (path, exc))
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise UsageError(
+            "%s is not UTF-8 -- compressproof handles UTF-8 text" % path)
+    return raw, text
+
+
+def split_lines(text):
+    """Logical lines without the trailing-newline artifact."""
+    if text == "":
+        return [], False
+    parts = text.split("\n")
+    trailing = parts[-1] == ""
+    if trailing:
+        parts = parts[:-1]
+    return parts, trailing
+
+
+def join_lines(lines, trailing):
+    text = "\n".join(lines)
+    if trailing and (lines or text == ""):
+        text += "\n"
+    if not lines and not trailing:
+        return ""
+    return text
+
+
+def dump_canonical(obj):
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=True).encode("ascii") + b"\n"
+
+
+# -- mode implementations -------------------------------------------------
+
+def short_key(full, index, line):
+    """16-hex prefix of the SHA-256, extended on prefix collision."""
+    length = 16
+    while full[:length] in index:
+        length += 4
+    return full[:length]
+
+
+def compress_dedupe(text, raw):
+    lines, trailing = split_lines(text)
+    index = {}
+    seen = {}
+    body = []
+    for line in lines:
+        full = sha256_hex(line.encode("utf-8"))
+        if full in seen:
+            body.append({"t": "ref", "h": seen[full]})
+        else:
+            key = short_key(full, index, line)
+            index[key] = line
+            seen[full] = key
+            body.append({"t": "def", "h": key})
+    bundle = {
+        "format": FORMAT,
+        "mode": "dedupe",
+        "transform_id": TRANSFORM_IDS["dedupe"],
+        "sha256_in": sha256_hex(raw),
+        "bytes_in": len(raw),
+        "trailing_newline": trailing,
+        "line_count": len(lines),
+        "index": index,
+        "body": body,
+    }
+    return bundle, None
+
+
+def restore_dedupe(bundle):
+    index = bundle["index"]
+    try:
+        lines = [index[item["h"]] for item in bundle["body"]]
+    except KeyError as exc:
+        raise ValueError("dedupe index has no key %s" % (exc,))
+    return join_lines(lines, bundle["trailing_newline"])
+
+
+_WS_TRAIL = " \t\r"
+
+
+def compress_strip(text, raw):
+    lines, trailing = split_lines(text)
+    body = []
+    ops = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        core = line.rstrip(_WS_TRAIL)
+        if core == "":
+            # run of blank (possibly whitespace-only) lines -> keep one
+            trails = []
+            j = i
+            while j < len(lines) and lines[j].rstrip(_WS_TRAIL) == "":
+                trails.append(lines[j][len(lines[j].rstrip(_WS_TRAIL)):])
+                j += 1
+            body.append("")
+            ops.append({"trail": trails[0], "skip": j - i - 1,
+                        "skip_trails": trails[1:]})
+            i = j
+        else:
+            body.append(core)
+            ops.append({"trail": line[len(core):], "skip": 0,
+                        "skip_trails": []})
+            i += 1
+    bundle = {
+        "format": FORMAT,
+        "mode": "strip",
+        "transform_id": TRANSFORM_IDS["strip"],
+        "sha256_in": sha256_hex(raw),
+        "bytes_in": len(raw),
+        "trailing_newline": trailing,
+        "line_count": len(lines),
+        "body": body,
+        "ops": ops,
+    }
+    return bundle, None
+
+
+def restore_strip(bundle):
+    out = []
+    for line, op in zip(bundle["body"], bundle["ops"]):
+        out.append(line + op["trail"])
+        for extra in op["skip_trails"]:
+            out.append(extra)
+    return join_lines(out, bundle["trailing_newline"])
+
+
+def compile_query(query, regex):
+    if regex:
+        try:
+            pattern = re.compile(query)
+        except re.error as exc:
+            raise UsageError("bad --query regex: %s" % exc)
+        return lambda line: pattern.search(line) is not None
+    return lambda line: query in line
+
+
+def compress_extract(text, raw, query, regex=False):
+    if query is None or query == "":
+        raise UsageError("--mode extract needs a non-empty --query")
+    matches = compile_query(query, regex)
+    lines, trailing = split_lines(text)
+    kept = []
+    dropped = {}
+    keep_nos = []
+    for number, line in enumerate(lines):
+        if matches(line):
+            kept.append(line)
+            keep_nos.append(number)
+        else:
+            dropped[str(number)] = line
+    bundle = {
+        "format": FORMAT,
+        "mode": "extract",
+        "transform_id": TRANSFORM_IDS["extract"] + (
+            ":regex" if regex else ":substring"),
+        "sha256_in": sha256_hex(raw),
+        "bytes_in": len(raw),
+        "trailing_newline": trailing,
+        "line_count": len(lines),
+        "query": query,
+        "regex": bool(regex),
+        "kept": keep_nos,
+        "body": kept,
+        "sidecar_sha256": None,  # filled in by the caller once written
+    }
+    sidecar = {
+        "format": SIDECAR_FORMAT,
+        "query": query,
+        "regex": bool(regex),
+        "line_count": len(lines),
+        "trailing_newline": trailing,
+        "dropped": dropped,
+    }
+    return bundle, sidecar
+
+
+def restore_extract(bundle, sidecar):
+    if sidecar is None:
+        raise UsageError("--mode extract needs its --sidecar file to verify")
+    total = bundle["line_count"]
+    lines = [None] * total
+    for number, line in zip(bundle["kept"], bundle["body"]):
+        lines[number] = line
+    for key, line in sidecar["dropped"].items():
+        lines[int(key)] = line
+    if any(item is None for item in lines):
+        raise ValueError("bundle/sidecar line coverage is incomplete")
+    return join_lines(lines, bundle["trailing_newline"])
+
+
+def compress_dispatch(mode, text, raw, query=None, regex=False):
+    if mode == "dedupe":
+        return compress_dedupe(text, raw)
+    if mode == "strip":
+        return compress_strip(text, raw)
+    if mode == "extract":
+        return compress_extract(text, raw, query, regex=regex)
+    raise UsageError("unknown --mode %r (choose %s)"
+                     % (mode, "|".join(MODES)))
+
+
+def restore_bundle(bundle, sidecar):
+    mode = bundle.get("mode")
+    if mode == "dedupe":
+        return restore_dedupe(bundle)
+    if mode == "strip":
+        return restore_strip(bundle)
+    if mode == "extract":
+        return restore_extract(bundle, sidecar)
+    raise UsageError("bundle has unknown mode %r" % (mode,))
+
+
+# -- subcommands ----------------------------------------------------------
+
+def write_file(path, data):
+    try:
+        with open(path, "wb") as handle:
+            handle.write(data)
+    except OSError as exc:
+        raise UsageError("cannot write %s: %s" % (path, exc))
+
+
+def load_json_file(path, what):
+    try:
+        with open(path, "rb") as handle:
+            return json.loads(handle.read().decode("utf-8"))
+    except OSError as exc:
+        raise UsageError("cannot read %s %s: %s" % (what, path, exc))
+    except ValueError as exc:
+        raise UsageError("cannot parse %s %s: %s" % (what, path, exc))
+
+
+def check_bundle_shape(bundle, path):
+    for key in ("format", "mode", "sha256_in", "bytes_in"):
+        if key not in bundle:
+            raise UsageError("bundle %s is not a compressproof bundle "
+                             "(missing %r)" % (path, key))
+    if bundle.get("format") != FORMAT:
+        raise UsageError("bundle %s has format %r, expected %r"
+                         % (path, bundle.get("format"), FORMAT))
+
+
+def cmd_compress(args, color):
+    if args.mode not in MODES:
+        raise UsageError("unknown --mode %r (choose %s)"
+                         % (args.mode, "|".join(MODES)))
+    if args.mode == "extract" and not args.sidecar:
+        raise UsageError("--mode extract needs --sidecar FILE")
+    if args.mode != "extract" and args.sidecar:
+        raise UsageError("--sidecar is only used with --mode extract")
+    if args.query is not None and args.mode != "extract":
+        raise UsageError("--query is only used with --mode extract")
+    raw, text = read_text_file(args.in_file)
+    bundle, sidecar = compress_dispatch(
+        args.mode, text, raw, query=args.query, regex=args.regex)
+    bundle_data = dump_canonical(bundle) if args.mode != "extract" else None
+    sidecar_data = dump_canonical(sidecar) if sidecar is not None else None
+    if sidecar is not None:
+        bundle["sidecar_sha256"] = sha256_hex(sidecar_data)
+        bundle_data = dump_canonical(bundle)
+        write_file(args.sidecar, sidecar_data)
+    write_file(args.out, bundle_data)
+    # self-verify: restore from the in-memory objects and compare bytes
+    restored = restore_bundle(bundle, sidecar)
+    restored_raw = restored.encode("utf-8")
+    sha_out = sha256_hex(restored_raw)
+    ok = restored_raw == raw
+    ratio = len(bundle_data) / max(1, len(raw))
+    if args.format == "json":
+        print(json.dumps({
+            "ok": ok, "mode": args.mode,
+            "transform_id": bundle["transform_id"],
+            "bytes_in": len(raw), "bytes_out": len(bundle_data),
+            "sidecar_bytes": len(sidecar_data) if sidecar_data else 0,
+            "ratio": ratio,
+            "sha256_in": sha256_hex(raw), "sha256_out": sha_out,
+            "roundtrip": ok,
+            "findings": [] if ok else [{
+                "file": args.out, "line": 0, "rule": "silent-loss",
+                "severity": "fail",
+                "message": FINDINGS["silent-loss"][1]}]}, indent=2))
+    else:
+        status = paint("roundtrip=ok", GREEN, BOLD, color=color) if ok else \
+            paint("roundtrip=MISMATCH", RED, BOLD, color=color)
+        print("compressproof: %s %s: %d -> %d bytes (%.1f%%), "
+              "sha256_in=%s sha256_out=%s %s"
+              % (args.mode, args.in_file, len(raw), len(bundle_data),
+                 ratio * 100, sha256_hex(raw), sha_out, status))
+        if sidecar_data:
+            print("compressproof: sidecar %s holds %d dropped byte(s) "
+                  "in %d byte(s)"
+                  % (args.sidecar,
+                     bundle["bytes_in"] - sum(len(l.encode("utf-8")) + 1
+                                              for l in bundle["body"]),
+                     len(sidecar_data)))
+    return 0 if ok else 1
+
+
+def cmd_verify(args, color):
+    raw, _ = read_text_file(args.orig)
+    bundle = load_json_file(args.bundle, "bundle")
+    check_bundle_shape(bundle, args.bundle)
+    sidecar = None
+    sidecar_data = None
+    rows = []
+    if bundle["mode"] == "extract":
+        if not args.sidecar:
+            raise UsageError("bundle is mode extract -- pass its --sidecar")
+        sidecar_data = open(args.sidecar, "rb").read() \
+            if os.path.exists(args.sidecar) else None
+        if sidecar_data is None:
+            raise UsageError("cannot read sidecar %s" % args.sidecar)
+        try:
+            sidecar = json.loads(sidecar_data.decode("utf-8"))
+        except ValueError as exc:
+            raise UsageError("cannot parse sidecar %s: %s"
+                             % (args.sidecar, exc))
+        if sha256_hex(sidecar_data) != bundle.get("sidecar_sha256"):
+            rows.append({"file": args.bundle, "line": 0,
+                         "rule": "sidecar-mismatch", "severity": "fail",
+                         "measured": sha256_hex(sidecar_data)[:16],
+                         "threshold": (bundle.get("sidecar_sha256") or "")[:16],
+                         "message": FINDINGS["sidecar-mismatch"][1]})
+    try:
+        restored = restore_bundle(bundle, sidecar) if not rows else None
+    except (ValueError, KeyError, UsageError) as exc:
+        raise UsageError("cannot restore bundle %s: %s" % (args.bundle, exc))
+    sha_in = sha256_hex(raw)
+    ok = True
+    if restored is not None:
+        sha_out = sha256_hex(restored.encode("utf-8"))
+        if restored.encode("utf-8") != raw:
+            ok = False
+            rows.append({"file": args.bundle, "line": 0, "rule": "silent-loss",
+                         "severity": "fail", "measured": sha_out[:16],
+                         "threshold": sha_in[:16],
+                         "message": "restored sha256 %s != original %s"
+                                    % (sha_out[:16], sha_in[:16])})
+    else:
+        sha_out = None
+        ok = False
+    try:
+        bytes_out = os.path.getsize(args.bundle)
+    except OSError:
+        bytes_out = None
+    ratio = (bytes_out / max(1, len(raw))) if bytes_out is not None else None
+    if args.format == "json":
+        print(json.dumps({
+            "ok": ok, "bytes_in": len(raw), "bytes_out": bytes_out,
+            "sidecar_bytes": len(sidecar_data) if sidecar_data else 0,
+            "ratio": ratio, "sha256_in": sha_in, "sha256_out": sha_out,
+            "roundtrip": ok and not rows, "findings": rows}, indent=2))
+    else:
+        for row in rows:
+            print("%s  %s  %-16s %s"
+                  % (row["file"],
+                     paint("FAIL", RED, BOLD, color=color),
+                     row["rule"], row["message"]))
+        if rows:
+            print()
+        if ok and not rows:
+            print(paint(
+                "compressproof: verify %s: roundtrip=ok bytes_in=%d "
+                "bytes_out=%s ratio=%s sha256_in=%s sha256_out=%s"
+                % (args.bundle, len(raw), bytes_out,
+                   ("%.1f%%" % (ratio * 100)) if ratio is not None else "?",
+                   sha_in, sha_out), GREEN, BOLD, color=color))
+        else:
+            print(paint(
+                "compressproof: verify %s: %d finding(s) -- "
+                "the bytes would NOT survive this transform"
+                % (args.bundle, len(rows)), RED, BOLD, color=color))
+    return 0 if (ok and not rows) else 1
+
+
+def normalize_needles(entry):
+    needles = []
+    for item in entry.get("needles", []):
+        if isinstance(item, str):
+            needles.append({"needle": item, "expect": True})
+        else:
+            needles.append({"needle": item["needle"],
+                            "expect": bool(item.get("expect", True))})
+    return needles
+
+
+def cmd_proof(args, color):
+    corpus = args.corpus
+    if not os.path.isdir(corpus):
+        raise UsageError("not a directory: %s" % corpus)
+    needles_path = args.needles or os.path.join(
+        os.path.dirname(os.path.abspath(corpus)), "needles.json")
+    spec = load_json_file(needles_path, "needles")
+    if "files" not in spec or not isinstance(spec["files"], dict):
+        raise UsageError("needles file needs a {\"files\": {...}} mapping")
+    rows = []
+    oracle_total = 0
+    oracle_match = 0
+    trunc_kept = 0
+    gzip_direct_kept = 0
+    roundtrip_ok = True
+    files_out = {}
+    for name in sorted(spec["files"]):
+        entry = spec["files"][name]
+        path = os.path.join(corpus, name)
+        raw, text = read_text_file(path)
+        query = entry.get("query", "")
+        regex = bool(entry.get("regex", False))
+        needles = normalize_needles(entry)
+        file_entry = {"bytes_in": len(raw), "sha256_in": sha256_hex(raw),
+                      "modes": {}, "oracle": {}}
+        search_spaces = {}
+        for mode in MODES:
+            q = query if mode == "extract" else None
+            bundle, sidecar = compress_dispatch(
+                mode, text, raw, query=q, regex=regex)
+            bundle_data = dump_canonical(
+                dict(bundle, sidecar_sha256=sha256_hex(
+                    dump_canonical(sidecar))) if sidecar is not None
+                else bundle)
+            restored = restore_bundle(bundle, sidecar)
+            ok = restored.encode("utf-8") == raw
+            roundtrip_ok = roundtrip_ok and ok
+            ratio = len(bundle_data) / max(1, len(raw))
+            file_entry["modes"][mode] = {
+                "bytes_out": len(bundle_data), "ratio": ratio,
+                "sha256_in": sha256_hex(raw),
+                "sha256_out": sha256_hex(restored.encode("utf-8")),
+                "roundtrip": ok}
+            search_spaces[mode] = bundle_data.decode("ascii")
+            if sidecar is not None:
+                search_spaces[mode] += dump_canonical(sidecar).decode("ascii")
+            rows.append((name, mode, len(raw), len(bundle_data), ratio, ok))
+        # baselines on the same bytes, same machine, same command
+        extract_budget = file_entry["modes"]["extract"]["bytes_out"]
+        trunc_text = raw[:extract_budget].decode("utf-8", errors="ignore")
+        gz = gzip.compress(raw, compresslevel=6)
+        file_entry["baselines"] = {
+            "trunc_budget_bytes": extract_budget,
+            "trunc_ratio": extract_budget / max(1, len(raw)),
+            "gzip_bytes": len(gz),
+            "gzip_ratio": len(gz) / max(1, len(raw))}
+        oracle_here = 0
+        oracle_hit = 0
+        trunc_here = 0
+        gzip_here = 0
+        for item in needles:
+            needle = item["needle"]
+            full = needle in text
+            if full != item["expect"]:
+                raise UsageError(
+                    "needles.json is stale: %r expect=%s but the corpus "
+                    "file %s says %s" % (needle, item["expect"], name, full))
+            oracle_total += len(MODES)
+            oracle_here += len(MODES)
+            for mode in MODES:
+                comp = needle in search_spaces[mode]
+                if comp == full:
+                    oracle_match += 1
+                    oracle_hit += 1
+            if (needle in trunc_text) == full:
+                trunc_kept += 1
+                trunc_here += 1
+            if (needle.encode("utf-8") in gz) == full:
+                gzip_direct_kept += 1
+                gzip_here += 1
+        file_entry["oracle"] = {"questions": oracle_here,
+                                "matched": oracle_hit,
+                                "trunc_kept": trunc_here,
+                                "gzip_direct_kept": gzip_here,
+                                "total_needles": len(needles)}
+        files_out[name] = file_entry
+    verdict = roundtrip_ok and oracle_match == oracle_total
+    findings = []
+    if not roundtrip_ok:
+        findings.append({"file": "-", "line": 0,
+                         "rule": "roundtrip-failure", "severity": "fail",
+                         "message": FINDINGS["roundtrip-failure"][1]})
+    if oracle_match != oracle_total:
+        findings.append({"file": "-", "line": 0,
+                         "rule": "answer-divergence", "severity": "fail",
+                         "message": "%d/%d answers matched"
+                                    % (oracle_match, oracle_total)})
+    result = {
+        "ok": verdict, "verdict": "pass" if verdict else "fail",
+        "corpus": os.path.basename(os.path.abspath(corpus)),
+        "oracle": {"total": oracle_total, "matched": oracle_match,
+                   "trunc_kept": trunc_kept,
+                   "gzip_direct_kept": gzip_direct_kept},
+        "files": files_out, "findings": findings,
+    }
+    if args.results:
+        write_file(args.results,
+                   (json.dumps(result, indent=2,
+                               sort_keys=True) + "\n").encode("utf-8"))
+    if args.format == "json":
+        print(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        width = min(24, max([len(n) for n in files_out] or [8]))
+        print("%-*s  %-7s %8s %9s %7s  %s"
+              % (width, "file", "mode", "bytes_in", "bytes_out",
+                 "ratio", "roundtrip"))
+        for name, mode, size_in, size_out, ratio, ok in rows:
+            mark = paint("ok", GREEN, BOLD, color=color) if ok else \
+                paint("MISMATCH", RED, BOLD, color=color)
+            print("%-*s  %-7s %8d %9d %6.1f%%  %s"
+                  % (width, name, mode, size_in, size_out,
+                     ratio * 100, mark))
+        print()
+        print("oracle: %d/%d answers match "
+              "(truncation keeps %d/%d at equal budget, "
+              "gzip-direct keeps %d/%d -- binary, must fully "
+              "decompress to query)"
+              % (oracle_match, oracle_total, trunc_kept, oracle_total,
+                 gzip_direct_kept, oracle_total))
+        if verdict:
+            print(paint("compressproof: proof PASS -- reversible, "
+                        "query-answerable, %d/%d answers kept"
+                        % (oracle_match, oracle_total),
+                        GREEN, BOLD, color=color))
+        else:
+            print(paint("compressproof: proof FAIL -- %d finding(s)"
+                        % len(findings), RED, BOLD, color=color))
+    return 0 if verdict else 1
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="compressproof",
+        description="Verified context compressor: shrink context with a "
+                    "byte-exact round-trip proof and an answer-equivalence "
+                    "oracle.")
+    parser.add_argument("--no-color", action="store_true")
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    compress = sub.add_parser("compress", help="compress one file")
+    compress.add_argument("--mode", required=True,
+                          help="dedupe|strip|extract")
+    compress.add_argument("--in", dest="in_file", required=True)
+    compress.add_argument("--out", required=True)
+    compress.add_argument("--sidecar", default=None)
+    compress.add_argument("--query", default=None)
+    compress.add_argument("--regex", action="store_true")
+
+    verify = sub.add_parser("verify", help="restore and compare SHA-256")
+    verify.add_argument("--orig", required=True)
+    verify.add_argument("--bundle", required=True)
+    verify.add_argument("--sidecar", default=None)
+
+    proof = sub.add_parser("proof", help="run the round-trip + oracle proof")
+    proof.add_argument("--corpus", required=True)
+    proof.add_argument("--needles", default=None)
+    proof.add_argument("--results", default=None)
+
+    args = parser.parse_args(argv)
+    color = (not args.no_color) and sys.stdout.isatty()
+    try:
+        if args.command == "compress":
+            return cmd_compress(args, color)
+        if args.command == "verify":
+            return cmd_verify(args, color)
+        if args.command == "proof":
+            return cmd_proof(args, color)
+    except UsageError as exc:
+        print("compressproof: %s" % exc, file=sys.stderr)
+        return 2
+    raise UsageError("unknown command")  # pragma: no cover
+
+
+if __name__ == "__main__":
+    sys.exit(main())

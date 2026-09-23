@@ -1,0 +1,7 @@
+line one with trailing spaces   
+line two with a tab	
+
+
+line five after blank run
+   
+last line no trailing

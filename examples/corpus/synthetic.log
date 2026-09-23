@@ -1,0 +1,74 @@
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:00:01Z INFO  runner-3 job=nightly-audit started sha=b1a2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0
+2026-09-20T10:00:02Z INFO  runner-3 step=checkout uses=actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+2026-09-20T10:00:03Z INFO  runner-3 step=test command="pytest -q" result=pass duration_s=42
+2026-09-20T10:00:04Z WARN  runner-3 rule=missing-paths-filter msg="on: push without paths -- every push runs 2 job(s)"
+2026-09-20T10:00:05Z INFO  runner-3 heartbeat ok queue_depth=0 wasted_min=0
+2026-09-20T10:00:06Z INFO  runner-3 job=nightly-audit finished conclusion=success minutes=5
+2026-09-20T10:12:00Z ERROR runner-3 job=nightly-audit conclusion=failure wasted_min=20 unique_marker=ZXQ-7741
+2026-09-20T10:12:01Z INFO  runner-3 note="end of synthetic log run_number=42"
