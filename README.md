@@ -133,9 +133,7 @@ raw substring scan of `gzip -6` bytes keeps only **6/90** (binary --
 you must fully decompress to query). Our claim is NOT "smaller than
 gzip": on small structured files the JSON bundle is *larger* than the
 input (see the `dedupe`/`strip` ratios above); the claim is
-**reversible + query-answerable + 90/90 answers kept**, with the one
-mode built for shrinking -- `extract` -- at **6.6%-46.5%** of the
-original. Raw JSON under `examples/results/proof.json`.
+**reversible + query-answerable + 90/90 answers kept**. Extract mode: 5 of 6 corpus files shrink to 6.6%-46.5% of original; the pathological 108-byte padded.txt expands to 370.4% - the table below prints every ratio honestly. Raw JSON under `examples/results/proof.json`.
 
 The tampered bundle is caught:
 
@@ -186,7 +184,7 @@ and the full corpus proof.
   failure with both SHA-256 values printed, never a warning you can
   miss.
 
-## One path, many gates - the family
+## One path, many gates — the family
 
 | Repo | What its verdict means |
 | --- | ---|
@@ -201,9 +199,10 @@ and the full corpus proof.
 | [testgate](https://github.com/F0Rextasy/testgate) | the tests that ran are the tests that exist - gaps, dupes, skips |
 | [bandaid](https://github.com/F0Rextasy/bandaid) | the diff doesn't hide a silent failure - swallowed errors, dead guards |
 | [wincompat](https://github.com/F0Rextasy/wincompat) | every path in the tree survives a Windows checkout |
-| [compressproof](https://github.com/F0Rextasy/compressproof) | the context shrank without losing an answer — reversible compression, byte proof, answer-equivalence oracle |
-| [uigate](https://github.com/F0Rextasy/uigate) | the UI stops looking like the same AI slop — measurable design-slop lint, WCAG + template tells |
-| [aitell](https://github.com/F0Rextasy/aitell) | the prose stops reading as AI — deterministic AI-tell detection with a published confusion matrix |
+| [compressproof](https://github.com/F0Rextasy/compressproof) | the context shrank without losing an answer - reversible compression, byte proof, answer-equivalence oracle |
+| [uigate](https://github.com/F0Rextasy/uigate) | the UI stops looking like the same AI slop - measurable design-slop lint, WCAG + template tells |
+| [aitell](https://github.com/F0Rextasy/aitell) | the prose stops reading as AI - deterministic AI-tell detection with a published confusion matrix |
+| [route-drift](https://github.com/F0Rextasy/route-drift) | OpenAPI spec vs code routes drift gate |
 
 MIT licensed. New redundancy patterns welcome - attach the input bytes
 and the ratio they compress to.
