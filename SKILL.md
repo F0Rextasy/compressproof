@@ -1,8 +1,8 @@
 ---
 name: compressproof
-description: Verifies context compression is reversible and answer-preserving -- dedupe repeated blocks by content hash, reversible whitespace/strip transforms with recorded ops, and query-extract with dropped bytes kept in a sidecar so verify restores byte-exact SHA-256 (mismatch exits 1 as silent-loss). Ships a proof harness over a committed corpus: round-trip table for every file x mode plus an answer-equivalence oracle of needle questions answered identically on original vs compressed form. Use when shrinking agent context, logs, or retrieved files before stuffing a prompt. Exit 0 = round-trip clean / oracle 100%; exit 1 = silent-loss or answer divergence; exit 2 = usage error.
+description: "Verifies context compression is reversible and answer-preserving: dedupe repeated blocks by content hash, reversible whitespace-strip transforms with recorded ops, and query-extract with dropped bytes kept in a sidecar so verify restores byte-exact SHA-256. Ships a proof harness over a committed corpus with a round-trip table plus an answer-equivalence oracle. Use when shrinking agent context, logs, or retrieved files. Exit 0 is clean, exit 1 is silent-loss or answer divergence, exit 2 is usage error."
 license: MIT
-compatibility: Requires Python 3.8+ stdlib only (no PyYAML, no network, no GPU). Works on Windows and Linux. Deterministic verdicts -- same input bytes give the same bundle bytes and exit code. Works in Claude Code, Codex, Cursor, and any Agent Skills compatible client.
+compatibility: "Requires Python 3.8+ stdlib only (no PyYAML, no network, no GPU). Works on Windows and Linux. Deterministic verdicts: same input bytes give the same bundle bytes and exit code."
 metadata:
   author: F0Rextasy
   version: "1.0"
